@@ -27,6 +27,13 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      # Bước 2.5: Giữ lại Chìa khóa Keystore vĩnh viễn bằng Cache để Update không bị lỗi xung đột
+      - name: Persist Android Keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-keystore-permanent-v1
+
       # Bước 3: Cài đặt Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
