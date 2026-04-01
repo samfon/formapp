@@ -7,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../main.dart';
 
+import '../services/gemini_service.dart';
+import '../services/sheet_service.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,6 +22,13 @@ class HomeScreenState extends State<HomeScreen> {
   List<TextEditingController> _controllers = [];
   bool _isLoading = true;
   bool _isSending = false;
+
+  // AI & Sheets variables
+  final TextEditingController _aiInputCtrl = TextEditingController();
+  bool _isAiParsing = false;
+  String _productFieldName = 'Sản phẩm';
+  String _linkFieldName = 'Link';
+  List<ProductItem> _products = [];
 
   // ⚠️ THAY ĐỔI URL NÀY BẰNG LINK APPS SCRIPT CỦA BẠN
   static const String _appsScriptUrl = 'https://script.google.com/macros/s/AKfycbwcJfCZjbZrcC7NHqJvAmquHwAMpK1fDkg2Dm0Bj9Zpf0U0cqC-I-29kHioVsa7P3LSYg/exec';
@@ -42,17 +52,60 @@ class HomeScreenState extends State<HomeScreen> {
   Future<void> _loadFields() async {
     final prefs = await SharedPreferences.getInstance();
     final fields = prefs.getStringList('field_names') ?? [];
+    
+    _productFieldName = prefs.getString('field_name_product') ?? 'Sản phẩm';
+    _linkFieldName = prefs.getString('field_name_link') ?? 'Link';
 
     // Dispose old controllers
     for (var c in _controllers) {
       c.dispose();
     }
 
+    // Load products concurrently if url is set
+    List<ProductItem> loadedProducts = await SheetService.fetchProducts();
+
     setState(() {
       _fieldNames = fields;
       _controllers = fields.map((_) => TextEditingController()).toList();
+      _products = loadedProducts;
       _isLoading = false;
     });
+  }
+
+  Future<void> _handleAiAnalyze() async {
+    final rawText = _aiInputCtrl.text.trim();
+    if (rawText.isEmpty || _fieldNames.isEmpty) return;
+
+    setState(() => _isAiParsing = true);
+    // Dismiss keyboard
+    FocusScope.of(context).unfocus();
+
+    try {
+      final result = await GeminiService.analyzeText(rawText, _fieldNames);
+      if (result != null) {
+        setState(() {
+           for (int i = 0; i < _fieldNames.length; i++) {
+             final field = _fieldNames[i];
+             if (result.containsKey(field) && result[field]!.isNotEmpty) {
+               _controllers[i].text = result[field]!;
+             }
+           }
+        });
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Đã trích xuất thông tin thành công!'), backgroundColor: Color(0xFF1A73E8)),
+           );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi tính năng AI: $e'), backgroundColor: const Color(0xFFEA4335)),
+         );
+      }
+    } finally {
+      if (mounted) setState(() => _isAiParsing = false);
+    }
   }
 
   Future<void> _submitData() async {
@@ -162,6 +215,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _aiInputCtrl.dispose();
     for (var c in _controllers) {
       c.dispose();
     }
@@ -265,10 +319,80 @@ class HomeScreenState extends State<HomeScreen> {
   Widget _buildForm() {
     return Column(
       children: [
+        // AI Input Form
+        if (_fieldNames.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3E8FF),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFD8B4FE)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.auto_awesome, color: Color(0xFF9333EA), size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Rút trích tự động bằng hình thức trò chuyện',
+                      style: TextStyle(color: Color(0xFF9333EA), fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    TextField(
+                      controller: _aiInputCtrl,
+                      minLines: 3,
+                      maxLines: 5,
+                      style: const TextStyle(fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: "Dán đoạn văn bản thô vào đây (Ví dụ: 'bán 2 hộp sữa vinamilk 100k ghi chú giao sớm')...",
+                        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                        filled: true,
+                        fillColor: Colors.white,
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Colors.purple.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Colors.purple.shade300, width: 1.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: ElevatedButton(
+                        onPressed: _isAiParsing ? null : _handleAiAnalyze,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9333EA),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                        child: _isAiParsing
+                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                           : const Text('Phân tích', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
         // Header info
         Container(
           width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xFFE8F0FE),
@@ -296,10 +420,21 @@ class HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             itemCount: _fieldNames.length,
             itemBuilder: (context, index) {
+              final fieldName = _fieldNames[index];
+              final isProductField = fieldName.toLowerCase() == _productFieldName.toLowerCase();
               return _InputFieldCard(
-                fieldName: _fieldNames[index],
+                fieldName: fieldName,
                 controller: _controllers[index],
                 index: index,
+                isProductField: isProductField,
+                products: _products,
+                onProductSelected: (ProductItem item) {
+                  // Find link field index and fill it
+                  int linkIndex = _fieldNames.indexWhere((f) => f.toLowerCase() == _linkFieldName.toLowerCase());
+                  if (linkIndex != -1) {
+                    _controllers[linkIndex].text = item.link;
+                  }
+                },
               );
             },
           ),
@@ -352,11 +487,17 @@ class _InputFieldCard extends StatelessWidget {
     required this.fieldName,
     required this.controller,
     required this.index,
+    this.isProductField = false,
+    this.products = const [],
+    this.onProductSelected,
   });
 
   final String fieldName;
   final TextEditingController controller;
   final int index;
+  final bool isProductField;
+  final List<ProductItem> products;
+  final ValueChanged<ProductItem>? onProductSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -407,17 +548,96 @@ class _InputFieldCard extends StatelessWidget {
                   color: Color(0xFF5F6368),
                 ),
               ),
+              if (isProductField && products.isNotEmpty) ...[
+                 const Spacer(),
+                 Container(
+                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                   decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.green.shade200)),
+                   child: Text('${products.length} SP', style: TextStyle(fontSize: 10, color: Colors.green.shade700, fontWeight: FontWeight.bold)),
+                 ),
+              ]
             ],
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: 'Nhập $fieldName...',
-              hintStyle: TextStyle(color: Colors.grey.shade400),
+          
+          if (isProductField && products.isNotEmpty)
+            Autocomplete<ProductItem>(
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text == '') {
+                  return const Iterable<ProductItem>.empty();
+                }
+                return products.where((ProductItem option) {
+                  return option.name.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                });
+              },
+              displayStringForOption: (ProductItem option) => option.name,
+              onSelected: onProductSelected,
+              fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                // Keep the autocomplete controller exactly synced with our generic controller
+                // when user types or selects
+                textEditingController.addListener(() {
+                   if (controller.text != textEditingController.text) {
+                     controller.text = textEditingController.text;
+                   }
+                });
+                
+                // If generic controller changes from outside (e.g. AI), update autocomplete view
+                controller.addListener(() {
+                   if (textEditingController.text != controller.text) {
+                     textEditingController.text = controller.text;
+                   }
+                });
+
+                return TextField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    hintText: 'Tìm kiếm $fieldName từ Google Sheet...',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    suffixIcon: const Icon(Icons.search, size: 20),
+                  ),
+                  textInputAction: TextInputAction.next,
+                );
+              },
+              optionsViewBuilder: (context, onSelected, options) {
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4.0,
+                    borderRadius: BorderRadius.circular(12),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 200, maxWidth: 350),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final ProductItem option = options.elementAt(index);
+                          return InkWell(
+                            onTap: () {
+                              onSelected(option);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Text(option.name, style: const TextStyle(fontSize: 14)),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+            )
+          else 
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'Nhập $fieldName...',
+                hintStyle: TextStyle(color: Colors.grey.shade400),
+              ),
+              textInputAction: TextInputAction.next,
             ),
-            textInputAction: TextInputAction.next,
-          ),
         ],
       ),
     );

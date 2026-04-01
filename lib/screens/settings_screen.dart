@@ -13,6 +13,12 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
   bool _isLoading = true;
   bool _isSaving = false;
 
+  // New configurations (AI & Sheet)
+  final TextEditingController _apiKeyCtrl = TextEditingController();
+  final TextEditingController _sheetUrlCtrl = TextEditingController();
+  final TextEditingController _productFieldCtrl = TextEditingController();
+  final TextEditingController _linkFieldCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -22,6 +28,13 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
   Future<void> _loadFields() async {
     final prefs = await SharedPreferences.getInstance();
     final fields = prefs.getStringList('field_names') ?? [];
+    
+    // Load AI & Sheet settings with defaults if empty
+    _apiKeyCtrl.text = prefs.getString('gemini_api_key') ?? 'AIzaSyC5m_HpyGvVVl6FUd0p0gcYeaPSnKkb3Kw';
+    _sheetUrlCtrl.text = prefs.getString('sheet_product_url') ?? 'https://docs.google.com/spreadsheets/d/12WhiBOELiCO0IJAxY1J1Z0Zd6oDGzXCM1ZjT6hCub4g/edit?gid=0#gid=0';
+    _productFieldCtrl.text = prefs.getString('field_name_product') ?? 'Sản phẩm';
+    _linkFieldCtrl.text = prefs.getString('field_name_link') ?? 'Link';
+
     setState(() {
       _controllers = fields.map((name) => TextEditingController(text: name)).toList();
       _isLoading = false;
@@ -31,8 +44,17 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
   Future<void> _saveFields() async {
     setState(() => _isSaving = true);
     final prefs = await SharedPreferences.getInstance();
+    
+    // Save dynamic fields
     final names = _controllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
     await prefs.setStringList('field_names', names);
+    
+    // Save AI & Sheet Settings
+    await prefs.setString('gemini_api_key', _apiKeyCtrl.text.trim());
+    await prefs.setString('sheet_product_url', _sheetUrlCtrl.text.trim());
+    await prefs.setString('field_name_product', _productFieldCtrl.text.trim());
+    await prefs.setString('field_name_link', _linkFieldCtrl.text.trim());
+
     setState(() => _isSaving = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hướng dẫn',
+                              'Cấu Hình Trường Dữ Liệu',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -142,7 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
                             ),
                             SizedBox(height: 4),
                             Text(
-                              'Thêm các trường dữ liệu tương ứng với cột trên Google Sheet của bạn.',
+                              'Thêm các trường dữ liệu tương ứng với cột trên Google Sheet của bạn (Lưu ý: Tên phải khớp chính xác).',
                               style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
                             ),
                           ],
@@ -150,6 +172,57 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
                       ),
                     ],
                   ),
+                ),
+
+                // AI CONFIGURATION UI
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'CẤU HÌNH AI & SHEET SẢN PHẨM',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF5F6368)),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildSettingField(
+                        controller: _apiKeyCtrl,
+                        label: 'Gemini API Key',
+                        icon: Icons.key_rounded,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildSettingField(
+                        controller: _sheetUrlCtrl,
+                        label: 'Link Google Sheet chứa Sản Phẩm',
+                        icon: Icons.link_rounded,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildSettingField(
+                              controller: _productFieldCtrl,
+                              label: 'Tên trường "Sản phẩm" (nhập ở đưới)',
+                              icon: Icons.inventory_2_outlined,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildSettingField(
+                              controller: _linkFieldCtrl,
+                              label: 'Tên trường "Link" ảnh/web (nếu có)',
+                              icon: Icons.insert_link_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Divider(color: Color(0xFFE8EAED)),
                 ),
 
                 // Field count + Add button
@@ -257,6 +330,33 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
                   ),
               ],
             ),
+    );
+  }
+
+  Widget _buildSettingField({required TextEditingController controller, required String label, required IconData icon}) {
+    return TextFormField(
+      controller: controller,
+      style: const TextStyle(fontSize: 14, color: Color(0xFF202124)),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Color(0xFF5F6368), fontSize: 13),
+        prefixIcon: Icon(icon, size: 20, color: const Color(0xFF5F6368)),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFDADCE0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFDADCE0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 1.5),
+        ),
+      ),
     );
   }
 }
