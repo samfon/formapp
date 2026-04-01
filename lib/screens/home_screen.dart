@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../updater.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../main.dart';
@@ -24,6 +27,11 @@ class HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadFields();
+    
+    // Auto check for updates when app opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Updater.checkForUpdates(context);
+    });
   }
 
   /// Public method to reload fields from outside (called by MainNavigation)

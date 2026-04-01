@@ -8,6 +8,9 @@ on:
     branches: [ main ]
   workflow_dispatch:  # Cho phép bấm nút chạy thủ công
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,11 +40,23 @@ jobs:
 
       # Bước 5: Build file APK
       - name: Build APK
-        run: flutter build apk --release
+        # We also pass the run number to the Flutter build name to update internally
+        run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
-      # Bước 6: Upload APK để bạn tải về
+      # Bước 6: Upload APK để bạn tải về (Dự phòng)
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FormApp-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # Bước 7: Tạo công khai Bản Cập Nhật mới để App có thể tự tải
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Nâng cấp phiên bản 1.0.${{ github.run_number }}
+          body: Hệ thống đã phát hành bản cập nhật mới nhất. Khắc phục lỗi và thêm tính năng tự động nâng cấp.
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
