@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/history_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,14 +67,17 @@ class MainNavigation extends StatefulWidget {
 class MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<HistoryScreenState> _historyKey = GlobalKey<HistoryScreenState>();
 
   void switchToTab(int index) {
     setState(() {
       _currentIndex = index;
     });
-    // Reload home fields when switching back to home tab
+    // Reload fields/history when switching tabs
     if (index == 0) {
       _homeKey.currentState?.reloadFields();
+    } else if (index == 1) {
+      _historyKey.currentState?.reloadHistory();
     }
   }
 
@@ -84,6 +88,7 @@ class MainNavigationState extends State<MainNavigation> {
         index: _currentIndex,
         children: [
           HomeScreen(key: _homeKey),
+          HistoryScreen(key: _historyKey),
           const SettingsScreen(),
         ],
       ),
@@ -102,6 +107,11 @@ class MainNavigationState extends State<MainNavigation> {
             label: 'Nhập liệu',
           ),
           NavigationDestination(
+            icon: Icon(Icons.history_rounded),
+            selectedIcon: Icon(Icons.history, color: Color(0xFF1A73E8)),
+            label: 'Lịch sử',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings, color: Color(0xFF1A73E8)),
             label: 'Cấu hình',
@@ -111,3 +121,4 @@ class MainNavigationState extends State<MainNavigation> {
     );
   }
 }
+

@@ -85,6 +85,19 @@ class HomeScreenState extends State<HomeScreen> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 302) {
+        // Save to History
+        final prefs = await SharedPreferences.getInstance();
+        final historyListStr = prefs.getStringList('submission_history') ?? [];
+        
+        final newHistoryItem = {
+          'timestamp': DateTime.now().toIso8601String(),
+          'fields': _fieldNames,
+          'data': values,
+        };
+        
+        historyListStr.add(jsonEncode(newHistoryItem));
+        await prefs.setStringList('submission_history', historyListStr);
+
         // Clear all fields on success
         for (var c in _controllers) {
           c.clear();
@@ -96,14 +109,14 @@ class HomeScreenState extends State<HomeScreen> {
                 children: [
                   Icon(Icons.check_circle, color: Colors.white, size: 20),
                   SizedBox(width: 12),
-                  Text('Đã lưu thành công!', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text('Đã lưu dữ liệu vào Sheet & Lịch sử!', style: TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
               backgroundColor: const Color(0xFF34A853),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 2),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
