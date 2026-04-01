@@ -1,0 +1,47 @@
+# Kịch bản tự động build APK cho FormApp
+# File này sẽ tự chạy khi bạn push code lên GitHub
+
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Cho phép bấm nút chạy thủ công
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Bước 1: Tải code từ repo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Bước 2: Cài đặt Java (cần cho Android build)
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # Bước 3: Cài đặt Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.2'
+          channel: 'stable'
+
+      # Bước 4: Tải các package cần thiết
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Bước 5: Build file APK
+      - name: Build APK
+        run: flutter build apk --release
+
+      # Bước 6: Upload APK để bạn tải về
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FormApp-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
